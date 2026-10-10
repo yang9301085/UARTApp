@@ -1,7 +1,7 @@
 ---
 description: "Use when 需要指导 Linux 用户态 UART 串口编程：termios 配置（波特率 B115200、数据位 CS8、校验 PARENB/PARODD、停止位 CSTOPB、流控 CRTSCTS）、VMIN/VTIME 阻塞读、select/poll 超时接收、write+tcdrain 发送、termios2/TCSETS2 非标准波特率、RS485 方向控制、串口帧协议设计、回环调试。特点：只给思路和注意事项，不直接写代码。Do NOT use for 内核态 UART 驱动、一般 C 语法问题。"
 name: "UART导师"
-tools: [vscode, execute, read, agent, edit, search, web, browser, todo]
+tools: [vscode, execute, read, agent, edit, search, browser, todo]
 user-invocable: true
 argument-hint: "UART 编程问题，例如 '如何配置 115200 8N1'、'为什么 select 超时收不到数据'"
 ---
