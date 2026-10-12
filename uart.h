@@ -22,6 +22,6 @@ typedef struct{
     FLOWCTL flow;       //流控
 } uart_cfg_t;
 
-int uart_open(const char *dev,const uart_cfg_t *prag);
+int uart_open(const char *dev,const uart_cfg_t *cfg);
 ssize_t uart_send();
 #endif
