@@ -23,7 +23,7 @@
 |--------|------|------|
 | M0 | WSL 环境搭建 + socat 虚拟串口回环验证 | ✅ 2026-10-10 |
 | M1 | 骨架 uart.h/uart.c/main.c + 打开设备 | ✅ 2026-10-12 |
-| M2 | termios 配置（115200 8N1） | ⬜ |
+| M2 | termios 配置（115200 8N1） | ✅ 2026-10-13 |
 | M3 | 发送（循环 write + tcdrain） | ⬜ |
 | M4 | 接收（VMIN/VTIME + select 超时） | ⬜ |
 | M5 | 关闭时恢复旧配置 + 完整回环测试 | ⬜ |
@@ -38,12 +38,12 @@
 | | K1.4 ✅ | `fcntl` 恢复阻塞模式 |
 | | K1.5 ✅ | 错误处理：`errno` / `perror` / `strerror` |
 | | K1.6 ✅ | `main` 里从 `argv` 拿设备路径 |
-| **M2 配置** | K2.1 | `termios` 是什么、为什么先 `tcgetattr` |
-| | K2.2 | `cfmakeraw`：不设会出什么怪现象 |
-| | K2.3 | 波特率：`B115200` 宏是什么、为何要用 `cfsetispeed/cfsetospeed` |
-| | K2.4 | `c_cflag` 帧格式位：CS8/校验/停止位 |
-| | K2.5 | `CLOCAL`/`CREAD`：漏掉会发生什么 |
-| | K2.6 | `tcsetattr` + `tcflush` 收尾 + `stty` 反向验证 |
+| **M2 配置** | K2.1 ✅ | `termios` 是什么、为什么先 `tcgetattr` |
+| | K2.2 ✅ | `cfmakeraw`：不设会出什么怪现象 |
+| | K2.3 ✅ | 波特率：`B115200` 宏是什么、为何要用 `cfsetispeed/cfsetospeed` |
+| | K2.4 ✅ | `c_cflag` 帧格式位：CS8/校验/停止位 |
+| | K2.5 ✅ | `CLOCAL`/`CREAD`：漏掉会发生什么 |
+| | K2.6 ✅ | `tcsetattr` + `stty` 反向验证（`tcflush` 遗留，M5 收尾补） |
 | **M3 发送** | K3.1 | `write` 为什么可能"只写一半" |
 | | K3.2 | 循环写 + `tcdrain` 的意义 |
 | **M4 接收** | K4.1 | 串口是字节流：没有"消息"概念 |
@@ -59,25 +59,23 @@ gcc -Wall -Wextra -o uart_app main.c uart.c
 ./uart_app /tmp/ttyV0
 ```
 
-## 当前进行中（M2）
+## 当前进行中（M3）
 
-### M1 已完成（2026-10-12）
+### M2 已完成（2026-10-13）
 
-- `uart.h` 骨架：保护宏、`<sys/types.h>`、`FLOWCTL`、`uart_cfg_t`、`uart_open` 原型
-- `uart.c`：`uart_open` 实现——`open(O_RDWR|O_NOCTTY|O_NONBLOCK)` → `fcntl(F_GETFL/F_SETFL)` 恢复阻塞 → `fd<0` 时 `perror` + 返回 -1
-- `main.c`：`argc<2` 校验 → `uart_open(argv[1], NULL)` → 打印 fd / 报错退出
-- 验证通过：`./uart_app`（无参报用法）、`./uart_app /tmp/ttyV0`（socat 起后打开成功 fd=3、未起时打开失败）
+- `uart_open` 内补全 termios 配置：`tcgetattr` → `cfmakeraw` → `cfsetispeed/cfsetospeed(B115200)` → `c_cflag |= (CLOCAL|CREAD)` → `tcsetattr(fd, TCSANOW, &tio)`
+- 验证通过：`stty -F /tmp/ttyV0 -a` 显示 `speed 115200 baud`、`cs8`、`-parenb`、`-cstopb`、`cread clocal`、`min = 1; time = 0`，全部命中 115200 8N1
 
-### 待完成（下一步，M2）
+### 待完成（下一步，M3）
 
-- `uart_open` 内补 termios 配置：`tcgetattr` → `cfmakeraw` → 波特率/帧格式 → `CLOCAL|CREAD` → `tcsetattr` + `tcflush`
-- `main.c` 创建并填充 `uart_cfg_t`，替换 `NULL` 传入
-- 完成后 `stty -F /tmp/ttyV0 -a` 反向验证
+- M3 发送：循环 `write` + `tcdrain`
+- `main.c` 创建并填充 `uart_cfg_t`，替换 `NULL` 传入（`cfg` 参数用起来）
+- `uart.h`：`uart_send()` 空括号补参数
 
 ### 遗留债务（不阻塞，随对应里程碑处理）
 
 - `uart.h`：`ssize_t uart_send()` 空括号待改（M3）；`uart_recv`/`uart_close` 原型待补（M4/M5）
-- `uart.c`：`cfg` 参数未使用（M2 用上后自然消除）；`fcntl(F_GETFL)` 失败未检查（收尾时补）
+- `uart.c`：`cfg` 参数未使用（M3 用上后消除）；`fcntl(F_GETFL)` 失败未检查（收尾时补）；`tcflush` 未加（M5 收尾补）
 
 ### 待决设计问题（下次先定）
 

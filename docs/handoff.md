@@ -1,31 +1,38 @@
 # 会话交接（Handoff）
 
-> 供下一个教学会话 / 其他分支开发快速接手。最后更新：2026-10-12。
+> 供下一个教学会话 / 其他分支开发快速接手。最后更新：2026-10-13。
 
 ## 一句话现状
 
-M1（打开设备）已完成并通过 socat 回环验证；下一步进入 **M2（termios 配置 115200 8N1）**。
+M2（termios 配置 115200 8N1）已完成并通过 `stty` 反向验证；下一步进入 **M3（发送：循环 write + tcdrain）**。
 
 ---
 
-## 本次会话进展（2026-10-12）
+## 本次会话进展（2026-10-13）
 
-- 讲透并实现 `uart_open`：
-  - `open(dev, O_RDWR | O_NOCTTY | O_NONBLOCK)`
-  - `fcntl(fd, F_GETFL)` → `flag &= ~O_NONBLOCK` → `fcntl(fd, F_SETFL, flag)` 恢复阻塞
-  - `fd < 0` 时 `perror` + 返回 -1
-- 讲透并实现 `main.c`：`argc < 2` 校验 → `uart_open(argv[1], NULL)` → 打印 fd / 报错退出
-- 编译 `gcc -Wall -Wextra -o uart_app main.c uart.c` 通过（仅 `cfg` 未使用警告，良性）
-- socat 回环验证通过：无参报用法、未起 socat 报打开失败、起 socat 后打开成功 fd=3
+- 讲透并实现 `uart_open` 的 termios 配置（M2）：
+  - `tcgetattr(fd, &tio)` 读当前配置
+  - `cfmakeraw(&tio)` 原始模式（关回显/行编辑/`\r\n` 转换）
+  - `cfsetispeed(&tio, B115200)` + `cfsetospeed(&tio, B115200)` 设波特率
+  - `tio.c_cflag |= (CLOCAL | CREAD)` 置忽略 modem 控制线 + 使能接收
+  - `tcsetattr(fd, TCSANOW, &tio)` 写回内核立即生效（含返回值检查）
+- 验证通过：`stty -F /tmp/ttyV0 -a` 显示 `speed 115200 baud`、`cs8`、`-parenb`、`-cstopb`、`cread clocal`、`min=1; time=0`，全部命中 115200 8N1
+
+### 本次额外深入（源码追查）
+
+- 下载并解压了 **glibc 2.35 源码**（`~/glibc-src/usr/src/glibc/glibc-2.35/`）与 **Linux 6.5 内核源码**（`~/linux-src/usr/src/linux-source-6.5.0/`），追通了 `tcgetattr/tcsetattr` 的完整调用链：
+  - 用户函数 → glibc 包装（`__tcgetattr`/`__tcsetattr`，`weak_alias` 别名）→ `INLINE_SYSCALL` → `INTERNAL_SYSCALL` → x86_64 内联汇编 `syscall` 指令 → 内核 `tty_ioctl`/`tty_set_termios` → 8250 驱动 `serial8250_do_set_termios` → `serial_port_out(port, UART_LCR, ...)` 写硬件寄存器
+- 配置了 `.vscode/c_cpp_properties.json`：加了 `browse.path`（指向 glibc 源码）+ `limitSymbolsToIncludedHeaders: false`，用于"跳转到实现"
 
 ### 本次澄清的关键概念
 
-- 阻塞 vs 非阻塞：`O_NONBLOCK` 只让 `open` 不卡；恢复阻塞是让 `read` 在没数据时乖乖等
-- 内核缓冲区：数据先入内核 RX 缓冲区，`read` 从这里取；非阻塞 `read` 不丢数据，只是"来早了空手回"
-- `errno` / `perror` / `strerror`：`perror` 只用于系统调用错误，参数校验用 `printf`
-- `argc`/`argv`：`argv[0]` 是程序名，设备路径在 `argv[1]`；`argc==1` 表示用户没给路径
-- `fcntl` 读-改-写三步；置 1 用 `|`，清 0 用 `& ~`
-- 位掩码宏：`1 << n` 表示第 n 位
+- `struct termios` 4 个 flag（`c_iflag/oflag/cflag/lflag`）+ `c_cc[]` 数组；波特率/帧格式几乎都在 `c_cflag`
+- `cfmakeraw` 是 BSD 扩展（非 POSIX），受 `__USE_MISC` 保护；`cfsetispeed/ospeed` 才是 POSIX 标准
+- 波特率必须用 `B115200` 宏（值 `0010002` 八进制 = 4098，是内核编号，非 115200）
+- `CLOCAL`（忽略 modem 控制线/DCD）、`CREAD`（使能接收）
+- `TCSANOW`/`TCSADRAIN`/`TCSAFLUSH` 三种生效时机
+- `/tmp` 会被 WSL 重启清空，长期保留的文件要放家目录 `~/`
+- 内联汇编：`asm volatile("syscall")` 里只有 `syscall` 是汇编，`=a`/`0`/`memory` 是 GCC 约束语法
 
 ---
 
@@ -33,9 +40,9 @@ M1（打开设备）已完成并通过 socat 回环验证；下一步进入 **M2
 
 | 文件 | 状态 |
 |------|------|
-| `uart.h` | 保护宏、`<sys/types.h>`、`FLOWCTL`、`uart_cfg_t`、`uart_open` 原型；`uart_send()` 空括号待修 |
-| `uart.c` | `#include <stdio.h><fcntl.h>`；`uart_open` 已实现 |
-| `main.c` | `#include <stdio.h>`；`main` 已完成参数校验 + 打开 + 打印 |
+| `uart.h` | 保护宏、`<sys/types.h>`、`FLOWCTL`、`uart_cfg_t`、`uart_open` 原型；`uart_send()` 空括号待修（M3） |
+| `uart.c` | `#include <stdio.h><fcntl.h><termios.h>`；`uart_open` 已实现完整 termios 配置（M2） |
+| `main.c` | `#include <stdio.h>`；`main` 参数校验 + 打开 + 打印；`uart_open(argv[1], NULL)` 中 `NULL` 待换为实际 `uart_cfg_t`（M3） |
 
 ---
 
@@ -50,17 +57,17 @@ M1（打开设备）已完成并通过 socat 回环验证；下一步进入 **M2
 
 - `uart.h`：`ssize_t uart_send()` 空括号 → M3 改 `(void)` 或补参数
 - `uart.h`：缺 `uart_recv` / `uart_close` 原型 → M4 / M5 补
-- `uart.c`：`cfg` 参数未使用（M2 用上后消除）；`fcntl(F_GETFL)` 失败未检查（收尾补）
+- `uart.c`：`cfg` 参数未使用（M3 用上后消除）；`fcntl(F_GETFL)` 失败未检查（收尾补）；`tcflush` 未加（M5 收尾补）
 
 ---
 
-## 下一步（M2 起点）
+## 下一步（M3 起点）
 
-1. `uart_open` 内补 termios：`tcgetattr` → `cfmakeraw` → 波特率/帧格式 → `CLOCAL|CREAD` → `tcsetattr` + `tcflush`
-2. `main.c` 创建并填充 `uart_cfg_t`，替换 `NULL` 传入
-3. `stty -F /tmp/ttyV0 -a` 反向验证
+1. M3 发送：`uart_send` 实现循环 `write` + 发送后 `tcdrain`
+2. `main.c` 创建并填充 `uart_cfg_t`（含波特率 115200），替换 `NULL` 传入，让 `cfg` 参数用起来
+3. 补 `uart.h` 里 `uart_send` 原型参数
 
-知识点：K2.1 ~ K2.6（见 README 知识点地图）。
+知识点：K3.1 ~ K3.2（见 README 知识点地图）。
 
 ---
 
@@ -98,7 +105,8 @@ M1（打开设备）已完成并通过 socat 回环验证；下一步进入 **M2
 ### 教学知识点进度（通用）
 
 - M1 全部知识点 K1.1~K1.6 ✅
-- M2 ~ M5 见 README「教学知识点地图」
+- M2 全部知识点 K2.1~K2.6 ✅
+- M3 ~ M5 见 README「教学知识点地图」
 
 ### 教学方式备忘
 
