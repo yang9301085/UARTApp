@@ -2,6 +2,8 @@
 #define UART_H
 
 #include <sys/types.h>
+#include <termios.h>
+
 /**
  * 
  */
@@ -23,5 +25,8 @@ typedef struct{
 } uart_cfg_t;
 
 int uart_open(const char *dev,const uart_cfg_t *cfg);
+
+speed_t baud_to_speed (int baud);
+
 ssize_t uart_send();
 #endif
