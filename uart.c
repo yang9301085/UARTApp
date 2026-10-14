@@ -9,7 +9,7 @@ int uart_open(const char *dev, const uart_cfg_t *cfg)
 
     if (!cfg)
     {
-        fprintf(stderr,"uart_open：uart_cfg is NULL");
+        fprintf(stderr,"uart_open: uart_cfg is NULL\n");
         return -1;
     }
     
@@ -23,7 +23,7 @@ int uart_open(const char *dev, const uart_cfg_t *cfg)
 
     if (baud==B0)
     {
-        fprintf(stderr,"uart_open: baud error,set to default 115200");
+        fprintf(stderr,"uart_open: baud error,set to default 115200\n");
         baud=B115200;
     }
     
@@ -67,13 +67,13 @@ speed_t baud_to_speed(int baud)
 {
     switch(baud)
     {
-        case 57600: return B57600;
-        case 115200:return B115200;
-        case 230400: return B230400;
-        case 460800: return B460800;
-        case 500000: return B500000;
-        case 576000: return B576000;
-        case 921600: return B921600;
+        case 57600:   return B57600;
+        case 115200:  return B115200;
+        case 230400:  return B230400;
+        case 460800:  return B460800;
+        case 500000:  return B500000;
+        case 576000:  return B576000;
+        case 921600:  return B921600;
         case 1000000: return B1000000;
         case 1152000: return B1152000;
         case 1500000: return B1500000;
