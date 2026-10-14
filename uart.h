@@ -28,5 +28,5 @@ int uart_open(const char *dev,const uart_cfg_t *cfg);
 
 speed_t baud_to_speed (int baud);
 
-ssize_t uart_send();
+ssize_t uart_send(int fd, const void *buf, size_t count);
 #endif

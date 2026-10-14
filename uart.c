@@ -1,8 +1,34 @@
 #include <stdio.h>
 #include <fcntl.h>
 #include <termios.h>
+#include <unistd.h>   // write()
+#include <errno.h>    // errno 和 EINTR
 
 #include "uart.h"
+
+ssize_t uart_send(int fd, const void *buf, size_t count)
+{
+    ssize_t sendStatus=0;
+    size_t tmp=0;
+
+    while (tmp<count)
+    {
+        sendStatus=write(fd, (const unsigned char *)buf+tmp,count-tmp);
+        if (sendStatus>0)
+        {
+            tmp+=sendStatus;
+        }else if(sendStatus==0){
+            return -1;
+        }else{
+            if(errno==EINTR) {
+                continue;
+            }
+            return -1;
+        }
+    }
+    
+    return tmp;
+}
 
 int uart_open(const char *dev, const uart_cfg_t *cfg)
 {
