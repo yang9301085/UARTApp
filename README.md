@@ -24,8 +24,8 @@
 | M0 | WSL 环境搭建 + socat 虚拟串口回环验证 | ✅ 2026-10-10 |
 | M1 | 骨架 uart.h/uart.c/main.c + 打开设备 | ✅ 2026-10-12 |
 | M2 | termios 配置（115200 8N1） | ✅ 2026-10-13 |
-| M3 | 发送（循环 write + tcdrain） | ⬜ |
-| M4 | 接收（VMIN/VTIME + select 超时） | ⬜ |
+| M3 | 发送（循环 write + tcdrain） | ✅ 2026-10-14 |
+| M4 | 接收（uart_recv + 回环测试；select 超时待做） | 🔶 2026-10-15 |
 | M5 | 关闭时恢复旧配置 + 完整回环测试 | ⬜ |
 
 ## 教学知识点地图（里程碑 → 知识点）
@@ -44,40 +44,46 @@
 | | K2.4 ✅ | `c_cflag` 帧格式位：CS8/校验/停止位 |
 | | K2.5 ✅ | `CLOCAL`/`CREAD`：漏掉会发生什么 |
 | | K2.6 ✅ | `tcsetattr` + `stty` 反向验证（`tcflush` 遗留，M5 收尾补） |
-| **M3 发送** | K3.1 | `write` 为什么可能"只写一半" |
-| | K3.2 | 循环写 + `tcdrain` 的意义 |
-| **M4 接收** | K4.1 | 串口是字节流：没有"消息"概念 |
-| | K4.2 | VMIN/VTIME 三种组合语义 |
-| | K4.3 | `select` 超时接收 + `EINTR` |
+| **M3 发送** | K3.1 ✅ | `write` 为什么可能"只写一半" |
+| | K3.2 ✅ | 循环写 + `tcdrain` 的意义 |
+| **M4 接收** | K4.1 ✅ | 串口是字节流：没有"消息"概念 |
+| | K4.2 ✅ | VMIN/VTIME 三种组合语义 |
+| | K4.3 ⬜ | `select` 超时接收 + `EINTR` |
 | **M5 收尾** | K5.1 | 为什么要保存并恢复旧 `termios` |
 | | K5.2 | 完整回环测试 + README 更新 |
 
 ## 构建与验证
 
 ```bash
-gcc -Wall -Wextra -o uart_app main.c uart.c
-./uart_app /tmp/ttyV0
+gcc -Wall -Wextra -o uart_app main.c uart.c util.c
+./uart_app /tmp/ttyV0 115200 8 N 1 0
 ```
 
-## 当前进行中（M3）
+## 当前进行中（M4）
 
-### M2 已完成（2026-10-13）
+### M3 已完成（2026-10-14）
 
-- `uart_open` 内补全 termios 配置：`tcgetattr` → `cfmakeraw` → `cfsetispeed/cfsetospeed(B115200)` → `c_cflag |= (CLOCAL|CREAD)` → `tcsetattr(fd, TCSANOW, &tio)`
-- 验证通过：`stty -F /tmp/ttyV0 -a` 显示 `speed 115200 baud`、`cs8`、`-parenb`、`-cstopb`、`cread clocal`、`min = 1; time = 0`，全部命中 115200 8N1
+- `uart_send` 循环写：处理部分写、`EINTR` 重试、错误返回 -1
+- `uart.h` 补 `uart_send` 原型；`main.c` 用上 `uart_cfg_t` 并解析命令行参数
 
-### 待完成（下一步，M3）
+### M4 已完成（2026-10-15，commit 15e9d30）
 
-- M3 发送：循环 `write` + `tcdrain`
-- `main.c` 创建并填充 `uart_cfg_t`，替换 `NULL` 传入（`cfg` 参数用起来）
-- `uart.h`：`uart_send()` 空括号补参数
+- `uart_recv`：`do-while` 处理 `EINTR` 重试，返回实际字节数
+- `uart.h` 补 `uart_recv` 原型
+- `main.c` 回环测试跑通：`/tmp/ttyV0`（发）→ `/tmp/ttyV1`（收），`uart_send` 发 "hello loopback" → `uart_recv` 收回 → 打印
+
+### 待完成（下一步，M4 后半段）
+
+- K4.3：`select`/`poll` 超时接收，解决"read 一次收不全"的问题
+- 接收返回值完整处理（`rcvStatus <= 0` 边界）
 
 ### 遗留债务（不阻塞，随对应里程碑处理）
 
-- `uart.h`：`ssize_t uart_send()` 空括号待改（M3）；`uart_recv`/`uart_close` 原型待补（M4/M5）
-- `uart.c`：`cfg` 参数未使用（M3 用上后消除）；`fcntl(F_GETFL)` 失败未检查（收尾时补）；`tcflush` 未加（M5 收尾补）
+- `uart.c`：`fcntl(F_GETFL)` 失败未检查；`tcdrain` 未加（M5 决定）；`tcflush` 未加（M5）
+- `uart.h`：缺 `uart_close` 原型（M5）
+- `main.c`：`count` 用 `ssize_t` 而非 `size_t`（洁癖，不改也行）
 
 ### 待决设计问题（下次先定）
 
-1. `uart_recv` 超时：参数携带，还是由 `select`/`poll` 处理？
-2. 缓冲区指针类型：`void *` 还是 `unsigned char *`？
+1. `uart_recv` 超时：由 `select`/`poll` 处理（已倾向，M4 后半段做）
+2. 缓冲区指针类型：已定稿 `void *`（`uart_recv` 已用）
