@@ -1,6 +1,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <errno.h>
+
+#include <sys/select.h>
+
 #include "uart.h"
 #include "util.h"
 
@@ -12,6 +16,8 @@ int main(int argc, char *argv[])
         return 1;
 
     }
+    int appStatus=0;
+    int loopCount=3;
     int UARTfd_TX=0;
     int UARTfd_RX=0;
     uart_cfg_t cfg;
@@ -21,6 +27,11 @@ int main(int argc, char *argv[])
     ssize_t rcvStatus=0;
 
     const char *msg = "hello loopback";
+
+    int selectStatus=0;
+    struct timeval timeout;
+    int maxfds=0;
+    fd_set readfds;
 
     buf=(unsigned char *)malloc(sizeof(unsigned char)*(count+1));
 
@@ -48,6 +59,8 @@ int main(int argc, char *argv[])
         return 2;
     }
 
+    maxfds=UARTfd_RX+1;
+
     if(UARTfd_TX<0)
     {
         printf("串口 %s 打开失败\n",argv[1]);
@@ -58,15 +71,62 @@ int main(int argc, char *argv[])
 
 
     uart_send(UARTfd_TX,msg,strlen(msg));
-    rcvStatus=uart_recv(UARTfd_RX,buf,count);
     
-    if (rcvStatus>0)
-    {
-        buf[rcvStatus]='\0';
-        fprintf(stdout,"%s\n",buf);
-    }
+    do{
+        if(loopCount-- <0)
+        {
+            printf("UARTfd_RX is loop to limited\n");
+            break;
+        }
+        FD_ZERO(&readfds);
+        FD_SET(UARTfd_RX,&readfds);
+
+        timeout.tv_sec=1;
+        timeout.tv_usec=0;
+
+        selectStatus=select(maxfds, &readfds,NULL,NULL,&timeout);
+
+        if(selectStatus>0)
+        {
+            if(!FD_ISSET(UARTfd_RX, &readfds)){
+                printf("UARTfd_RX is not found in select SET\n");
+                appStatus=5;
+                break;
+            }
+
+            rcvStatus=uart_recv(UARTfd_RX,buf,count);
+
+            if (rcvStatus>0)
+            {
+                buf[rcvStatus]='\0';
+                fprintf(stdout,"%s\n",buf);
+            }else if(rcvStatus==0){
+                printf("UARTfd_RX is closed\n");
+                appStatus=6;
+                break;
+            }else{
+                if(errno==EINTR)
+                {
+                    printf("UARTfd_RX read error\n");
+                    appStatus=7;
+                    continue;
+                }
+                printf("UARTfd_RX read error,not EINTR \n");
+                appStatus=8;
+                break;
+            }
+        }else if(selectStatus==0){
+            printf("select timeout\n");
+            appStatus=3;
+            break;
+        }else if(selectStatus == -1 && errno != EINTR){
+            printf("select error, errno is %d errno\n",errno);
+            appStatus=4;
+            break;
+        }
+    }while (selectStatus == -1 && errno == EINTR);
     
     free(buf);
 
-    return 0;
+    return appStatus;
 }

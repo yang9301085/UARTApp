@@ -25,7 +25,7 @@
 | M1 | 骨架 uart.h/uart.c/main.c + 打开设备 | ✅ 2026-10-12 |
 | M2 | termios 配置（115200 8N1） | ✅ 2026-10-13 |
 | M3 | 发送（循环 write + tcdrain） | ✅ 2026-10-14 |
-| M4 | 接收（uart_recv + 回环测试；select 超时待做） | 🔶 2026-10-15 |
+| M4 | 接收（uart_recv + select 超时接收 + 回环测试） | ✅ 2026-10-15 |
 | M5 | 关闭时恢复旧配置 + 完整回环测试 | ⬜ |
 
 ## 教学知识点地图（里程碑 → 知识点）
@@ -48,7 +48,7 @@
 | | K3.2 ✅ | 循环写 + `tcdrain` 的意义 |
 | **M4 接收** | K4.1 ✅ | 串口是字节流：没有"消息"概念 |
 | | K4.2 ✅ | VMIN/VTIME 三种组合语义 |
-| | K4.3 ⬜ | `select` 超时接收 + `EINTR` |
+| | K4.3 ✅ | `select` 超时接收 + `EINTR` |
 | **M5 收尾** | K5.1 | 为什么要保存并恢复旧 `termios` |
 | | K5.2 | 完整回环测试 + README 更新 |
 
@@ -72,10 +72,11 @@ gcc -Wall -Wextra -o uart_app main.c uart.c util.c
 - `uart.h` 补 `uart_recv` 原型
 - `main.c` 回环测试跑通：`/tmp/ttyV0`（发）→ `/tmp/ttyV1`（收），`uart_send` 发 "hello loopback" → `uart_recv` 收回 → 打印
 
-### 待完成（下一步，M4 后半段）
+### M4 后半段已完成（2026-10-15）
 
-- K4.3：`select`/`poll` 超时接收，解决"read 一次收不全"的问题
-- 接收返回值完整处理（`rcvStatus <= 0` 边界）
+- K4.3：`select` 超时接收 + `EINTR` 重试；`main.c` 用 `fd_set`/`struct timeval` 实现超时，返回值三路处理
+- 接收返回值完整处理（`rcvStatus <= 0` 边界：0 对端关闭 / -1 出错）
+- 回环测试通过：正常接收（退出码 0）+ 超时路径（退出码 3）
 
 ### 遗留债务（不阻塞，随对应里程碑处理）
 
@@ -85,5 +86,5 @@ gcc -Wall -Wextra -o uart_app main.c uart.c util.c
 
 ### 待决设计问题（下次先定）
 
-1. `uart_recv` 超时：由 `select`/`poll` 处理（已倾向，M4 后半段做）
+1. `uart_recv` 超时：已定稿，由 `select` 在 `main.c` 应用层处理（M4 后半段已完成）
 2. 缓冲区指针类型：已定稿 `void *`（`uart_recv` 已用）
