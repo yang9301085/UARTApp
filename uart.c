@@ -30,6 +30,17 @@ ssize_t uart_send(int fd, const void *buf, size_t count)
     return tmp;
 }
 
+ssize_t uart_recv(int fd, void *buf, size_t count)
+{
+    ssize_t recvStatus =0;
+
+    do{
+        recvStatus = read(fd, buf, count);
+    }while (recvStatus < 0 && errno == EINTR);
+
+    return recvStatus;
+}
+
 int uart_open(const char *dev, const uart_cfg_t *cfg)
 {
 

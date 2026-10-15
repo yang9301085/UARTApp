@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 #include "uart.h"
 #include "util.h"
 
@@ -10,23 +12,61 @@ int main(int argc, char *argv[])
         return 1;
 
     }
-    int fd=0;
+    int UARTfd_TX=0;
+    int UARTfd_RX=0;
     uart_cfg_t cfg;
     
+    unsigned char *buf;
+    ssize_t count=1024;
+    ssize_t rcvStatus=0;
+
+    const char *msg = "hello loopback";
+
+    buf=(unsigned char *)malloc(sizeof(unsigned char)*(count+1));
+
+    if (!buf)
+    {
+        printf("资源分配失败\n");
+        return -1;
+    }
+    
+
     cfg.baud=str_to_int(UART_BAUD, argv[2]);
     cfg.data_bits=str_to_int(UART_DATA_BIT, argv[3]);
     cfg.parity=str_to_parity(argv[4]);
     cfg.stop_bits=str_to_int(UART_STOP_BIT, argv[5]);
     cfg.flow=str_to_FLOWCTL(argv[6]);
     
-    fd=uart_open(argv[1],&cfg);
+    UARTfd_RX=uart_open("/tmp/ttyV1",&cfg);
 
-    if(fd<0)
+    UARTfd_TX=uart_open(argv[1],&cfg);
+
+
+    if(UARTfd_RX<0)
     {
-        printf("串口打开失败\n");
+        printf("串口 /tmp/ttyV1 打开失败\n");
         return 2;
     }
-    printf("串口打开成功，fd: %d\n",fd);
+
+    if(UARTfd_TX<0)
+    {
+        printf("串口 %s 打开失败\n",argv[1]);
+        return 2;
+    }
+    printf("串口打开成功，fd: %d\n",UARTfd_TX);
+    printf("串口打开成功，fd: %d\n",UARTfd_RX);
+
+
+    uart_send(UARTfd_TX,msg,strlen(msg));
+    rcvStatus=uart_recv(UARTfd_RX,buf,count);
+    
+    if (rcvStatus>0)
+    {
+        buf[rcvStatus]='\0';
+        fprintf(stdout,"%s\n",buf);
+    }
+    
+    free(buf);
 
     return 0;
 }
