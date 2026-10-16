@@ -4,6 +4,8 @@
 #include <sys/types.h>
 #include <termios.h>
 
+#define LISTLENGTH 2
+
 /**
  * 
  */
@@ -24,10 +26,22 @@ typedef struct{
     FLOWCTL flow;       //流控
 } uart_cfg_t;
 
+typedef struct termiosList
+{
+    int fd;
+    struct termios tioOrgin;
+}terList;
+
+
 int uart_open(const char *dev,const uart_cfg_t *cfg);
 
 speed_t baud_to_speed (int baud);
 
 ssize_t uart_send(int fd, const void *buf, size_t count);
 ssize_t uart_recv(int fd, void *buf, size_t count);
+
+int AddtoList(int fd, struct termios tio);
+
+int uart_close(int fd);
+
 #endif

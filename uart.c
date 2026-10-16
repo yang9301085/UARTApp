@@ -6,6 +6,8 @@
 
 #include "uart.h"
 
+terList terlist[LISTLENGTH];
+
 ssize_t uart_send(int fd, const void *buf, size_t count)
 {
     ssize_t sendStatus=0;
@@ -39,6 +41,26 @@ ssize_t uart_recv(int fd, void *buf, size_t count)
     }while (recvStatus < 0 && errno == EINTR);
 
     return recvStatus;
+}
+
+int uart_close(int fd)
+{
+
+    for(int index=0;index < LISTLENGTH;index++)
+    {
+        if (fd==terlist[index].fd)
+        {
+            if(tcsetattr(terlist[index].fd, TCSANOW, &terlist[index].tioOrgin))
+            {
+                perror("uart_close: tcsetattr failed");
+                return -1;        
+            }
+        }
+
+    }
+
+    close(fd);
+    return 0;
 }
 
 int uart_open(const char *dev, const uart_cfg_t *cfg)
@@ -82,6 +104,8 @@ int uart_open(const char *dev, const uart_cfg_t *cfg)
         return -1;
     }
 
+    AddtoList(fd, tio);
+
     cfmakeraw(&tio);
 
 
@@ -121,4 +145,20 @@ speed_t baud_to_speed(int baud)
         case 4000000: return B4000000;
         default:    return B0;
     }
+}
+
+int AddtoList(int fd,struct termios tio)
+{
+    
+    static int terListIndex=0;
+
+    if (terListIndex>=LISTLENGTH)
+    {
+        printf("termios is out of memeory\n");
+        return -1;
+    }
+    terlist[terListIndex].fd=fd;
+    terlist[terListIndex].tioOrgin=tio;
+    terListIndex++;
+    return 0;
 }

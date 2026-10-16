@@ -126,6 +126,10 @@ int main(int argc, char *argv[])
         }
     }while (selectStatus == -1 && errno == EINTR);
     
+
+    uart_close(UARTfd_TX);
+    uart_close(UARTfd_RX);
+    
     free(buf);
 
     return appStatus;

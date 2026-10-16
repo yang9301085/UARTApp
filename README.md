@@ -26,7 +26,7 @@
 | M2 | termios 配置（115200 8N1） | ✅ 2026-10-13 |
 | M3 | 发送（循环 write + tcdrain） | ✅ 2026-10-14 |
 | M4 | 接收（uart_recv + select 超时接收 + 回环测试） | ✅ 2026-10-15 |
-| M5 | 关闭时恢复旧配置 + 完整回环测试 | ⬜ |
+| M5 | 关闭时恢复旧配置 + 完整回环测试 | ✅ 2026-10-16 |
 
 ## 教学知识点地图（里程碑 → 知识点）
 
@@ -49,8 +49,8 @@
 | **M4 接收** | K4.1 ✅ | 串口是字节流：没有"消息"概念 |
 | | K4.2 ✅ | VMIN/VTIME 三种组合语义 |
 | | K4.3 ✅ | `select` 超时接收 + `EINTR` |
-| **M5 收尾** | K5.1 | 为什么要保存并恢复旧 `termios` |
-| | K5.2 | 完整回环测试 + README 更新 |
+| **M5 收尾** | K5.1 ✅ | 为什么要保存并恢复旧 `termios` |
+| | K5.2 ✅ | 完整回环测试 + README 更新 |
 
 ## 构建与验证
 
@@ -59,7 +59,7 @@ gcc -Wall -Wextra -o uart_app main.c uart.c util.c
 ./uart_app /tmp/ttyV0 115200 8 N 1 0
 ```
 
-## 当前进行中（M4）
+## 当前进行中（M5）
 
 ### M3 已完成（2026-10-14）
 
@@ -78,13 +78,21 @@ gcc -Wall -Wextra -o uart_app main.c uart.c util.c
 - 接收返回值完整处理（`rcvStatus <= 0` 边界：0 对端关闭 / -1 出错）
 - 回环测试通过：正常接收（退出码 0）+ 超时路径（退出码 3）
 
+### M5 前半段已完成（2026-10-16）
+
+- K5.1：`uart_open` 用 `tcgetattr` 保存旧 `termios`（存入 `terlist` 全局表，`fd`↔旧配置一一对应）
+- `uart_close`：`tcsetattr` 恢复旧配置 + `close`；`main.c` 先关 TX 再关 RX
+- 回环测试通过：`stty -a` 运行前后配置逐字节一致，验证恢复生效
+- 待做：`tcdrain`（M5 后半段）
+
 ### 遗留债务（不阻塞，随对应里程碑处理）
 
-- `uart.c`：`fcntl(F_GETFL)` 失败未检查；`tcdrain` 未加（M5 决定）；`tcflush` 未加（M5）
-- `uart.h`：缺 `uart_close` 原型（M5）
+- `uart.c`：`fcntl(F_GETFL)` 失败未检查；`tcflush` 未加；`tcdrain` 未加（M5 后半段做）
+- `uart.c`：`terlist` 全局表 `terListIndex` 只增不减、`LISTLENGTH=2` 硬编码（教学够用，可优化为结构体句柄）
 - `main.c`：`count` 用 `ssize_t` 而非 `size_t`（洁癖，不改也行）
 
 ### 待决设计问题（下次先定）
 
 1. `uart_recv` 超时：已定稿，由 `select` 在 `main.c` 应用层处理（M4 后半段已完成）
 2. 缓冲区指针类型：已定稿 `void *`（`uart_recv` 已用）
+3. 旧 `termios` 存储：已定稿为全局表 `terlist[]`（`fd`↔配置一一对应），后续可重构为"结构体句柄"更优
