@@ -1,0 +1,27 @@
+
+/tmp/write-register-study-afp03onl/O0.o:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+0000000000000000 <inspect_write>:
+   0:	55                   	push   rbp
+   1:	48 89 e5             	mov    rbp,rsp
+   4:	89 7d dc             	mov    DWORD PTR [rbp-0x24],edi
+   7:	48 89 75 d0          	mov    QWORD PTR [rbp-0x30],rsi
+   b:	48 89 55 c8          	mov    QWORD PTR [rbp-0x38],rdx
+   f:	48 8b 45 c8          	mov    rax,QWORD PTR [rbp-0x38]
+  13:	48 89 45 f8          	mov    QWORD PTR [rbp-0x8],rax
+  17:	48 8b 45 d0          	mov    rax,QWORD PTR [rbp-0x30]
+  1b:	48 89 45 f0          	mov    QWORD PTR [rbp-0x10],rax
+  1f:	8b 45 dc             	mov    eax,DWORD PTR [rbp-0x24]
+  22:	89 45 ec             	mov    DWORD PTR [rbp-0x14],eax
+  25:	48 8b 55 f8          	mov    rdx,QWORD PTR [rbp-0x8]
+  29:	48 8b 75 f0          	mov    rsi,QWORD PTR [rbp-0x10]
+  2d:	8b 7d ec             	mov    edi,DWORD PTR [rbp-0x14]
+  30:	b8 01 00 00 00       	mov    eax,0x1
+  35:	0f 05                	syscall 
+  37:	48 89 45 e0          	mov    QWORD PTR [rbp-0x20],rax
+  3b:	48 8b 45 e0          	mov    rax,QWORD PTR [rbp-0x20]
+  3f:	5d                   	pop    rbp
+  40:	c3                   	ret    
