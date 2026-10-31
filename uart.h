@@ -2,6 +2,7 @@
 #define UART_H
 
 #include <sys/types.h>
+#include <termios.h>
 /**
  * 
  */
@@ -22,6 +23,8 @@ typedef struct{
     FLOWCTL flow;       //流控
 } uart_cfg_t;
 
-int uart_open(const char *dev,const uart_cfg_t *prag);
+/* 成功时，saved_tio 保存原配置，由调用者保留以便恢复。 */
+int uart_open(const char *dev, const uart_cfg_t *prag,
+              struct termios *saved_tio);
 ssize_t uart_send();
 #endif
